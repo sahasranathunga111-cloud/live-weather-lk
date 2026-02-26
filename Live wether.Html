@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>කාලගුණ සේවාව - ශ්‍රී ලංකා</title>
+    <style>
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --hot: #ef4444; --warm: #f97316; --cool: #10b981; }
+        body { font-family: 'Segoe UI', 'Iskoola Pota', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
+        .container { max-width: 1200px; margin: auto; }
+        h1 { text-align: center; color: var(--accent); font-size: 20px; margin-bottom: 20px; line-height: 1.5; }
+        
+        #high-temp-alert { 
+            display: none; background: linear-gradient(135deg, #ef4444, #f97316); 
+            padding: 15px; border-radius: 15px; text-align: center; margin-bottom: 25px; box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        
+        .map-wrapper { width: 100%; height: 380px; border-radius: 15px; overflow: hidden; border: 2px solid #334155; margin-bottom: 30px; }
+        
+        .table-container { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #334155; color: var(--accent); padding: 12px; text-align: left; font-size: 13px; border-bottom: 2px solid #1e293b; }
+        td { padding: 10px; border-bottom: 1px solid #334155; font-size: 14px; }
+        
+        .analysis-grids { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        @media (max-width: 900px) { .analysis-grids { grid-template-columns: 1fr; } }
+        
+        .live-dot { height: 10px; width: 10px; background-color: #ef4444; border-radius: 50%; display: inline-block; margin-right: 10px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .sync-text { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 15px; }
+        h3 { margin-top: 0; font-size: 15px; padding-bottom: 8px; border-bottom: 1px solid #444; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><span class="live-dot"></span> දිනපතා සජීවී කාලගුණ දත්ත විශ්ලේෂණය</h1>
+
+    <div id="high-temp-alert">
+        <h2 style="margin:0; font-size: 16px;">🔥 අද දවසේ වැඩිම උෂ්ණත්වය (හවස 6 යාවත්කාලීනය)</h2>
+        <p id="top-city" style="font-size: 24px; font-weight: bold; margin: 5px 0;">--</p>
+        <p id="top-temp" style="font-size: 18px; margin: 0;">--°C</p>
+    </div>
+
+    <div class="map-wrapper">
+        <iframe src="https://www.ventusky.com/?p=7.87;80.70;7&l=temperature" width="100%" height="100%" frameborder="0"></iframe>
+    </div>
+
+    <div class="table-container">
+        <h3 style="color: var(--accent);">📊 ප්‍රධාන නගර 25 හි තත්ත්වය</h3>
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>දිස්ත්‍රික්කය</th>
+                        <th>City</th>
+                        <th>උෂ්ණත්වය</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="main-weather-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="analysis-grids">
+        <div class="table-container" style="border-top: 4px solid var(--hot);">
+            <h3 style="color:var(--hot);">🔴 අධික රස්නය (> 35°C)</h3>
+            <table><tbody id="hot-body"></tbody></table>
+        </div>
+
+        <div class="table-container" style="border-top: 4px solid var(--warm);">
+            <h3 style="color:var(--warm);">🟠 මධ්‍යම රස්නය (33-35°C)</h3>
+            <table><tbody id="warm-body"></tbody></table>
+        </div>
+
+        <div class="table-container" style="border-top: 4px solid var(--cool);">
+            <h3 style="color:var(--cool);">🟢 සහනදායී (< 33°C)</h3>
+            <table><tbody id="cool-body"></tbody></table>
+        </div>
+    </div>
+
+    <p class="sync-text">සෑම විනාඩි 10 කට වරක් දත්ත ස්වයංක්‍රීයව යාවත්කාලීන වේ.</p>
+</div>
+
+<script>
+    // Districts in Sinhala, Cities in English
+    const locations = [
+        { name: "කොළඹ", city: "Colombo City", lat: 6.9271, lon: 79.8612 },
+        { name: "ගම්පහ", city: "Gampaha City", lat: 7.0840, lon: 79.9925 },
+        { name: "කළුතර", city: "Kalutara Town", lat: 6.5854, lon: 79.9607 },
+        { name: "මහනුවර", city: "Kandy City", lat: 7.2906, lon: 80.6337 },
+        { name: "මාතලේ", city: "Matale City", lat: 7.4675, lon: 80.6234 },
+        { name: "නුවරඑළිය", city: "Nuwara Eliya", lat: 6.9497, lon: 80.7891 },
+        { name: "ගාල්ල", city: "Galle Fort", lat: 6.0367, lon: 80.2170 },
+        { name: "මාතර", city: "Matara City", lat: 5.9549, lon: 80.5550 },
+        { name: "හම්බන්තොට", city: "Hambantota", lat: 6.1246, lon: 81.1185 },
+        { name: "යාපනය", city: "Jaffna City", lat: 9.6615, lon: 80.0255 },
+        { name: "කිලිනොච්චිය", city: "Kilinochchi", lat: 9.3803, lon: 80.3992 },
+        { name: "මන්නාරම", city: "Mannar Town", lat: 8.9810, lon: 79.9044 },
+        { name: "වවුනියාව", city: "Vavuniya Town", lat: 8.7542, lon: 80.4982 },
+        { name: "මුලතිව්", city: "Mullaitivu", lat: 9.2671, lon: 80.8142 },
+        { name: "මඩකලපුව", city: "Batticaloa", lat: 7.7102, lon: 81.6924 },
+        { name: "අම්පාර", city: "Ampara Town", lat: 7.2912, lon: 81.6724 },
+        { name: "ත්‍රිකුණාමලය", city: "Trincomalee", lat: 8.5711, lon: 81.2335 },
+        { name: "කුරුණෑගල", city: "Kurunegala", lat: 7.4863, lon: 80.3647 },
+        { name: "පුත්තලම", city: "Puttalam Town", lat: 8.0330, lon: 79.8259 },
+        { name: "අනුරාධපුරය", city: "Anuradhapura", lat: 8.3122, lon: 80.4131 },
+        { name: "පොළොන්නරුව", city: "Polonnaruwa", lat: 7.9403, lon: 81.0188 },
+        { name: "බදුල්ල", city: "Badulla Town", lat: 6.9934, lon: 81.0550 },
+        { name: "මොණරාගල", city: "Moneragala", lat: 6.8712, lon: 81.3507 },
+        { name: "රත්නපුරය", city: "Ratnapura", lat: 6.6828, lon: 80.3992 },
+        { name: "කෑගල්ල", city: "Kegalle Town", lat: 7.2513, lon: 80.3464 }
+    ];
+
+    async function fetchWeather() {
+        const mainBody = document.getElementById('main-weather-body');
+        const hotBody = document.getElementById('hot-body');
+        const warmBody = document.getElementById('warm-body');
+        const coolBody = document.getElementById('cool-body');
+        
+        let weatherResults = [];
+        for (const loc of locations) {
+            try {
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current_weather=true&daily=temperature_2m_max&timezone=auto`);
+                const data = await response.json();
+                weatherResults.push({ 
+                    name: loc.name, city: loc.city, 
+                    temp: data.current_weather.temperature, 
+                    max: data.daily.temperature_2m_max[0], 
+                    code: data.current_weather.weathercode 
+                });
+            } catch (e) { console.log(e); }
+        }
+
+        mainBody.innerHTML = ""; hotBody.innerHTML = ""; warmBody.innerHTML = ""; coolBody.innerHTML = "";
+
+        weatherResults.forEach(res => {
+            // Both City and Status in English
+            let status = "Clear Sky ☀️";
+            if(res.code >= 50) status = "Rainy 🌧️";
+            else if(res.code > 0) status = "Partly Cloudy ⛅";
+            
+            mainBody.innerHTML += `<tr><td>${res.name}</td><td>${res.city}</td><td style="font-weight:bold;">${res.temp}°C</td><td>${status}</td></tr>`;
+            
+            const row = `<tr><td>${res.city}</td><td style="font-weight:bold;">${res.temp}°C</td></tr>`;
+            if (res.temp > 35) hotBody.innerHTML += row.replace('bold', 'bold; color:var(--hot)');
+            else if (res.temp >= 33) warmBody.innerHTML += row.replace('bold', 'bold; color:var(--warm)');
+            else coolBody.innerHTML += row.replace('bold', 'bold; color:var(--cool)');
+        });
+
+        const now = new Date();
+        if (now.getHours() >= 18) {
+            let top = weatherResults.reduce((p, c) => (p.max > c.max) ? p : c);
+            document.getElementById('high-temp-alert').style.display = 'block';
+            document.getElementById('top-city').innerText = top.city;
+            document.getElementById('top-temp').innerText = "උපරිම උෂ්ණත්වය: " + top.max + "°C";
+        }
+    }
+
+    fetchWeather();
+    setInterval(fetchWeather, 600000); 
+</script>
+</body>
+</html>
